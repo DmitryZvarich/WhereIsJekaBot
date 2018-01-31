@@ -12,8 +12,9 @@ import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
-import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -30,15 +31,23 @@ public class WhereIsJekaBot extends TelegramLongPollingBot {
                 {
                     long chat_id = update.getMessage().getChatId();
 
-                    SendMessage message = new SendMessage() // Create a message object object
-                            .setChatId(chat_id)
-                            .setText("Jeka is here");
+                    SendMessage message = new SendMessage(chat_id, "Jeka is here");
 
-                    SendLocation location = location = getLocation().setChatId(chat_id);
+                    JSONObject jsonObject = getJSON();
+                    SendLocation location = new SendLocation((float)jsonObject.getDouble("ship_lat"), (float)jsonObject.getDouble("ship_lon")).setChatId(chat_id);
 
-                    execute(message); // Sending our message object to user
+                    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
+                    Date date = new Date(jsonObject.getLong("last_pos")*1000);
+
+                    String info = "From: " + jsonObject.get("last_port_name")
+                            + "\nTo: " + jsonObject.get("next_port_name")
+                            + "\nPosition received: " + simpleDateFormat.format(date);
+                    SendMessage infoMessage = new SendMessage(chat_id, info);
+
+                    execute(message);
                     execute(location);
-                } catch (TelegramApiException | SQLException e) {
+                    execute(infoMessage);
+                } catch (TelegramApiException e) {
                     e.printStackTrace();
                 }
             }
@@ -68,7 +77,8 @@ public class WhereIsJekaBot extends TelegramLongPollingBot {
         return "487489796:AAFY_RSxN43QJkAmsSSPxLCF47lA9HPEUUQ";
     }
 
-    private SendLocation getLocation() throws SQLException {
+    private JSONObject getJSON()
+    {
         HttpComponentsClientHttpRequestFactory clientHttpRequestFactory = new HttpComponentsClientHttpRequestFactory(
                 HttpClientBuilder.create().build());
         RestTemplate restTemplate = new RestTemplate(clientHttpRequestFactory);
@@ -80,8 +90,6 @@ public class WhereIsJekaBot extends TelegramLongPollingBot {
         ResponseEntity<String> response = restTemplate.exchange("https://www.marinetraffic.com/en/ais/get_info_window_json?asset_type=ship&id=3171412", HttpMethod.GET, httpEntity, String.class);
 
         JSONObject jsonObject = new JSONObject(response.getBody());
-        JSONObject values = jsonObject.getJSONObject("values");
-
-        return new SendLocation(Float.valueOf(values.get("ship_lat").toString()), Float.valueOf(values.get("ship_lon").toString()));
+        return jsonObject.getJSONObject("values");
     }
 }
